@@ -31,7 +31,7 @@ func main() {
 	// setup constant and transaction method calls
 	constantNode, transactNode := methodsMenus(contractABI.Methods)
 	// setup events
-	eventsNode := eventsMenu(contractABI.Events)
+	eventsNode, listEventNode, watchEventNode := eventsMenu(contractABI.Events)
 	// setup root node
 	rootNode := newRootNode([]*menuCompleter{constantNode, transactNode, eventsNode})
 	// out := make(chan string, 1024)
@@ -61,11 +61,44 @@ func main() {
 					if i.sub == nil {
 						switch i.parent {
 						case constantNode:
-							fmt.Printf("constant method: %s\n", i.name())
+							r, err := executeConstantMethod(cl, &contractAddr, contractABI, i.suggestion.Text)
+							if err != nil {
+								fmt.Printf(
+									"can't execute contant method \"%s\": %s\n",
+									i.suggestion.Text,
+									err,
+								)
+								break
+							}
+							fmt.Printf("returned:\n")
+							for nj, j := range r {
+								var sv interface{}
+								if jj, ok := j.(common.Address); ok {
+									sv = jj.Hex()
+								} else {
+									sv = j
+								}
+								fmt.Printf("  (%s) %s\n", contractABI.Methods[i.suggestion.Text].Outputs[nj].Type.String(), sv)
+							}
 						case transactNode:
-							fmt.Printf("transaction: %s\n", i.name())
-						case eventsNode:
-							fmt.Printf("event: %s\n", i.name())
+							if txSigner.kind() == signerNone {
+								fmt.Printf("signer not set\n")
+								break
+							}
+							tx, err := executeTransactMethod(cl, &contractAddr, contractABI, i.suggestion.Text)
+							if err != nil {
+								fmt.Printf(
+									"can't send transaction to method %s: %s\n",
+									i.suggestion.Text,
+									err,
+								)
+								break
+							}
+							fmt.Printf("transaction sent: %s\n", tx.Hash().Hex())
+						case listEventNode:
+							listEvents(cl, &contractAddr, contractABI, i.suggestion.Text)
+						case watchEventNode:
+							watchEvents(cl, &contractAddr, contractABI, i.suggestion.Text)
 						default:
 							cmd := i.name()
 							cmdFunc, ok := menuCommands[cmd]
